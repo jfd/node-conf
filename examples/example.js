@@ -15,6 +15,11 @@ var context = createContext({
       allow: String,
       deny: ["path"]
     }}
+  }},
+  
+  proxy: { index: "type", section: {
+    type: String,
+    name: String
   }}
   
 });
