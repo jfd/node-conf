@@ -6,11 +6,12 @@ var context = createContext({
   
   // server_name: String
   
-  server_name: {type: String, defaultValue: "test"},
+  server_name: {type: String, value: "test"},
   
   zone: Number,
   
   server: { section: {
+    path: "path",
     location: { section: {
       allow: String,
       deny: ["path"]
