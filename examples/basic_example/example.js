@@ -1,18 +1,18 @@
-var createContext = require("../lib/conf").createContext;
-var createScript = require("../lib/conf").createScript;
+var createContext = require("../../lib/conf").createContext;
+var createScript = require("../../lib/conf").createScript;
 
 
 var context = createContext({
-  
-  // server_name: String
   
   server_name: {type: String, value: "test"},
   
   zone: Number,
   
+  debug: Boolean,
+  
   server: { section: {
     path: "path",
-    location: { section: {
+    location: { list: true, section: {
       allow: String,
       deny: ["path"]
     }}
@@ -25,13 +25,8 @@ var context = createContext({
   
 });
 
-context.define("DEBUG");
-
-
-// config = context.parse("./example.conf");
-
 script = createScript("./example.conf");
 
-config = script.runInContext(context);
+config = script.runInContext(context, {DEBUG: true });
 
 console.log(config);
