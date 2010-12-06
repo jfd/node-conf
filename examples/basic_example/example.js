@@ -10,6 +10,11 @@ var context = createContext({
   
   debug: Boolean,
   
+  simple: { property: "name", struct: {
+    name: { type: String },
+    field: { type: "static", value: "test"}
+  }},
+  
   server: { index: "_index", section: {
     serverType: { type: "static", value: "http"},
     path: "path",
