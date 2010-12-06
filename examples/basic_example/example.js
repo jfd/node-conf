@@ -10,7 +10,7 @@ var context = createContext({
   
   debug: Boolean,
   
-  server: { section: {
+  server: { index: "_index", section: {
     path: "path",
     location: { list: true, section: {
       allow: String,
@@ -18,7 +18,7 @@ var context = createContext({
     }}
   }},
   
-  proxy: { index: "type", section: {
+  proxy: { property: "type", section: {
     type: String,
     name: String
   }}
