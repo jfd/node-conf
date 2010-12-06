@@ -11,6 +11,7 @@ var context = createContext({
   debug: Boolean,
   
   server: { index: "_index", section: {
+    serverType: { type: "static", value: "http"},
     path: "path",
     location: { list: true, section: {
       allow: String,
