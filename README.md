@@ -121,7 +121,7 @@ Represents a DslScript.
 
 ## Defining context markup 
 
-There is 13 different types of fields, each with it's own set of
+There is 15 different types of fields, each with it's own set of
 properties. 
 
 Many of the types share's a set of properties. For example, `required` can
