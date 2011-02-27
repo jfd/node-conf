@@ -1,5 +1,5 @@
-var createContext = require("../../lib/gendsl").createContext;
-var createScript = require("../../lib/gendsl").createScript;
+var createContext = require("../../conf").createContext;
+var createScript = require("../../conf").createScript;
 
 
 var context = createContext({
