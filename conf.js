@@ -89,13 +89,13 @@ exports.createScript = function(path, filename) {
   var script;
 
   resolvedPath = resolvePath(path, process.cwd());
-  script  = new DslScript(resolvedPath, filename);
+  script  = new Script(resolvedPath, filename);
   
   return script;
 }
 
 
-function DslScript(path, filename) {
+function Script(path, filename) {
   this.code = readFileSync(path, "utf8");
   this.filename = filename || basename(path);
   this.workdir = dirname(path);
@@ -104,7 +104,7 @@ function DslScript(path, filename) {
   this.isolated = false;
 }
 
-DslScript.prototype.runInContext = function(context, env) {
+Script.prototype.runInContext = function(context, env) {
   var sandbox;
   var runtime;
   var result;
@@ -259,7 +259,7 @@ function includeImpl(filename) {
   }
   
   try {
-    script = new DslScript(resolvedPath);
+    script = new Script(resolvedPath);
   } catch (ioException) {
     throw new Error("conf: Could not include config script '" + 
                     resolvedPath  + "'.");
