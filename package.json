@@ -1,14 +1,14 @@
 {
-	"name": "gendsl",
+	"name": "conf",
 	"version": "0.8.0",
-	"description": "General DSL library for Nodejs",
+	"description": "Config library for Nodejs",
 	"keywords": ["dsl", "conf", "config", "script", "general"],
 	"homepage": "https://github.com/jfd/node-gendsl",
 	"author": "Johan Dahlberg <dahlberg.johan@gmail.com> (https://github.com/jfd/)",
-	"main": "lib/gendsl",
+	"main": "lib/conf",
 	"repository": {
 		"type": "git",
-		"url": "git://github.com/jfd/node-gendsl.git"
+		"url": "git://github.com/jfd/node-conf.git"
 	},
 	"os": ["macos", "linux"],
 	"engines": {
