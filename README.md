@@ -1,11 +1,9 @@
 
-# GenDSL
+# Conf
 
-General DSL for Nodejs is a library that let you create DSL for your 
-applications. It can be used to create config files or even more advance 
-user scripts. 
+Conf is a general purpose configuration platform for Nodejs. It can be used to create simple config files or even more advance user scripts. 
 
-The DSL scripts are plain old javascript with a definition layer on top of
+The config scripts are plain old javascript with a definition layer on top of
 it.
 
 
@@ -43,7 +41,7 @@ when parsed:
               }
     }
 
-As mention above, the DSL script is Javascript, so it is possible to mix
+As mention above, the config scripts is Javascript, so it is possible to mix
 your DSL with Javascript. This is a powerful feature, which let you do 
 stuff like this:
 
@@ -108,13 +106,13 @@ Construct a new config script object, from specified path. An optional
 This function is synchronous and throws an exception on read errors.
 
 
-## DslScript
+## Script
 
-Represents a DslScript.
+Represents a Script.
 
 
 
-### DslScript.runInContext(context, [env])
+### Script.runInContext(context, [env])
 
 
 
@@ -466,8 +464,8 @@ always call `end` anyway.
 
 ### include(path)
 
-The keyword `include` imports another DSL script and executes it at
-current runtime position. The `path` argument must be set and should point
+The keyword `include` imports another config script and executes it in
+current runtime. The `path` argument must be set and should point
 to the script to include. Relative-paths are accepted.
 
     include("./mime_types.conf")
