@@ -33,6 +33,10 @@ var context = createContext({
 
 script = createScript("./example.conf");
 
-config = script.runInContext(context, {DEBUG: true });
+try {
+  config = script.runInContext(context, {DEBUG: true });  
+  console.log(config);
+} catch (err) {
+  console.log(err.getSimpleMessage())
+}
 
-console.log(config);
