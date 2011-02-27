@@ -3,7 +3,7 @@
 	"version": "0.8.0",
 	"description": "Config library for Nodejs",
 	"keywords": ["dsl", "conf", "config", "script", "general"],
-	"homepage": "https://github.com/jfd/node-gendsl",
+	"homepage": "https://github.com/jfd/node-conf",
 	"author": "Johan Dahlberg <dahlberg.johan@gmail.com> (https://github.com/jfd/)",
 	"main": "conf",
 	"repository": {
