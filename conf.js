@@ -113,7 +113,8 @@ Script.prototype.runInContext = function(context, env) {
     throw new Error("Expected a ConfigContext as context");
   }
   
-  runtime = new Runtime( context
+  runtime = new Runtime( this
+                       , context
                        , this.workdir
                        , this.paths
                        , this.strict
@@ -123,17 +124,17 @@ Script.prototype.runInContext = function(context, env) {
   sandbox = createSandbox(runtime, env || {});
 
   runtime.push(context);
-  
+
   runScript(sandbox, this.code, this.filename);
 
   while ((result = runtime.pop()) && runtime.currentScope);
   
   return result;
-}
-
+};
 
 // Runtime
-function Runtime(context, workdir, paths, strict, isolated) {
+function Runtime(script, context, workdir, paths, strict, isolated) {
+  this.script = script;
   this.context = context;
   this.workdir = workdir;
   this.paths = paths;
@@ -222,12 +223,6 @@ Runtime.prototype.resolvePath = function(path) {
 }
 
 
-
-/**
- *  ## ConfigContext
- *
- *
- */
 function ConfigContext() {
   this.name = "[ROOT]";
   this.root = this;
@@ -243,6 +238,65 @@ function ConfigContext() {
 }
 
 
+function RuntimeError(runtime, message) {
+  var self = this;
+  var tmp;
+  
+  this.runtime = runtime;
+  this.message = message;
+
+  // Ugly little hack to get the stack as an Array instead
+  // of just a formatted string.
+  Error.captureStackTrace(this, RuntimeError);
+  Error.prepareStackTrace = function(error, stack) {
+    self._stack = stack;
+  };
+
+  // This will trigger prepareStackTrace, where we 
+  // can get the stack as a graph.
+  tmp = this.stack;
+  this.stack = null;
+  
+  Error.prepareStackTrace = null;
+  
+  // Capture once more, this will cause `toString` to
+  // generate the stack-dump as string.
+  Error.captureStackTrace(this, RuntimeError);
+  
+}
+
+exports.RuntimeError = RuntimeError;
+require("util").inherits(RuntimeError, Error);
+
+RuntimeError.prototype.getSimpleMessage = function() {
+  var script;
+  var stack;
+  var obj;
+  
+  if (!this.runtime || !this.runtime.script) {
+    throw new Error("Uncompatible error object");
+  }
+  
+  script = this.runtime.script;
+  
+  stack = this._stack;
+  
+  for (var i = 0; i < stack.length; i++) {
+    obj = stack[i];
+
+    if (obj.getTypeName() == "[object global]" && 
+        obj.getEvalOrigin() == script.filename) {
+      // Matched current script.
+      
+      return this.message + " (" + script.filename + " " + obj.getLineNumber() 
+             + ":" + obj.getColumnNumber() + ")";
+    }
+  }
+  
+  return this.message;
+};
+
+
 // Include command implementation
 function includeImpl(filename) {
   var env = typeof arguments[1] === "object" && arguments[1] || {};
@@ -255,17 +309,18 @@ function includeImpl(filename) {
   resolvedPath = this.resolvePath(filename);
   
   if (resolvedPath == null) {
-    throw new Error("conf: Include not found '" + filename + "'");
+    throw new RuntimeError(this, "Include not found '" + filename + "'");
   }
   
   try {
     script = new Script(resolvedPath);
   } catch (ioException) {
-    throw new Error("conf: Could not include config script '" + 
-                    resolvedPath  + "'.");
+    throw new RuntimeError(this, "Could not include config script '" + 
+                                 resolvedPath  + "'.");
   }
 
-  runtime = new Runtime( this.context
+  runtime = new Runtime( script
+                       , this.context
                        , script.workdir
                        , this.paths
                        , this.strict
@@ -320,8 +375,7 @@ function createSandbox(runtime, env) {
   
   for (var name in env) {
     if (RESERVED_NAMES_RE(name)) {
-      throw new Error("conf: Cannot define environment " +
-                      "variable, name '" +  name + "' is reserved.");
+      throw new Error("Environment property '" +  name + "' is reserved.");
     }
     sandbox[name] = env[name];
   }
@@ -346,24 +400,24 @@ function updateSection(scope, markup) {
     name = keys[index];
     
     if (RESERVED_NAMES_RE(name)) {
-      throw new Error("conf: '" + name + "' is reserved.");
+      throw new Error("Name '" + name + "' is reserved.");
     }
     
     if (scope.fields[name] || scope.statics[name]) {
-      throw new Error("conf: Property is already defined '" + name + "'");
+      throw new Error("Property '" + name + "' is already defined");
     }
 
     field = getPropertyField(name, markup[name]);
     
     if (field == null) {
-      throw new Error("conf[" + name + "]: Property cannot be null");
+      throw new Error("Property '" + name + "' cannot be null");
     }
     
     if (field.type == "static") {
     
       if (field.value == NIL) {
-        throw new Error("conf[" + name + "]: " +
-                        "Value of type static must be set");
+        throw new Error("Property '" + name + "', value of type " +
+                        "static must be set");
       }
       
       scope.statics[name] = field.value;
@@ -372,12 +426,12 @@ function updateSection(scope, markup) {
     }
     
     if (PARAM_REQUIRED_RE(field.type) && !field.param) {
-      throw new Error("conf: `param`must be set for field.");
+      throw new Error("Property '" + name + "', `param` must be set for field.");
     }
     
     if (scope.type == "struct" && name !== scope.property) {
-      throw new Error("conf[" + name + "]:" + 
-                      "Struct's cannot contain dynamic properties.");
+      throw new Error("Property '" + name + "', struct's cannot contain " + 
+                      "dynamic properties.");
     }
 
     if (field.value !== NIL) {
@@ -402,14 +456,14 @@ function updateSection(scope, markup) {
       if (field.property) {
 
         if (typeof field.property !== "string") {
-          throw new Error( "conf-markup[" + name + "]: Expected a string "
+          throw new Error( "Property '" + name + "', expected a string "
                          + "value for section 'property'.");
         }        
       }
       
       if (field.index) {
         if (typeof field.index !== "string") {
-          throw new Error( "conf-markup[" + name + "]: Expected a string "
+          throw new Error( "Property '" + name + "', expected a string "
                          + "value for section 'index'.");
         }        
       }
@@ -435,8 +489,8 @@ function createProp(name) {
 
     if (!scope || !scope.fields || 
         !(field = scope.fields[name])) {
-      throw new Error("conf: Property '" + name + 
-                      "' cannot be defined in section '" + scope.name + "'");
+      throw new Error( "Property '" + name + "' cannot be defined "
+                     + "in section '" + scope.name + "'");
     }
 
     if (field.type == "section" || field.type == "struct") {
@@ -445,7 +499,8 @@ function createProp(name) {
       if (field.property) {
 
         if (!(prop = field.fields[field.property])) {
-          throw new Error("conf: Property field not found: " + field.property);
+          throw new Error( "Property '" + name + "', field not found: " 
+                         + field.property);
         }
 
         applyResult.call(this, prop, value);
@@ -493,7 +548,7 @@ function applyResult(field, value) {
     }
 
   } else if (name in result) {
-    throw new Error("conf[" + name + "]: Expected one value only");
+    throw new RuntimeError(this, "Expected one value only");
   } else {
     validated = validateValue.call(this, field, value);
     result[name] = validated
@@ -550,7 +605,8 @@ function endScope(scope, result, index) {
   while (length--) {
     key = keys[length];
     if (!(key in result)) {
-      throw new Error("conf: Required property '" + key + "' was not set.");
+      throw new RuntimeError(self, "Required property '" + key + "'" 
+                                 + "was not set.");
     }
   }
 
@@ -660,7 +716,7 @@ function getPropertyField(name, expr) {
   }
 
   if (PROPERTY_TYPES.indexOf(type) == -1) {
-    throw new Error("conf: Unknown field type: " + type);
+    throw new Error("Property '" + name + "', unknown field type: " + type);
   }
   
   return { name: name
@@ -677,9 +733,9 @@ function getPropertyField(name, expr) {
          , onexit: onexit };
 }
 
+
 // Validate value against struct
 function validateValue(field, value) {
-  var name = this.name;
   var strict = this.strict || field.strict;
   var workdir = this.workdir;
 
@@ -693,7 +749,7 @@ function validateValue(field, value) {
       if (typeof value == "boolean") {
         return value;
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected a Boolean");
+        throw new RuntimeError(this, "Expected a Boolean");
       } else {
         return true;
       }
@@ -703,7 +759,7 @@ function validateValue(field, value) {
       if (typeof value == "string") {
         return value;
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected a String");
+        throw new RuntimeError(this, "Expected a String");
       } else {
         return value.toString();
       }
@@ -713,9 +769,12 @@ function validateValue(field, value) {
       if (typeof value == "number") {
         return value;
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected a Number");
+        throw new RuntimeError(this, "Expected a Number");
       } else {
-        return parseInt(value);
+        if (isNaN(value = parseInt(value))) {
+          throw new RuntimeError(this, "Expected a Number");
+        }
+        return value;
       }
       break;
 
@@ -723,7 +782,7 @@ function validateValue(field, value) {
       if (Array.isArray(value)) {
         return value;
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected an Array");
+        throw new RuntimeError(this, "Expected an Array");
       } else {
         return [value];
       }
@@ -733,7 +792,7 @@ function validateValue(field, value) {
       if (typeof value == "object") {
         return value;
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected an Object");
+        throw new RuntimeError(this, "Expected an Object");
       } else {
         return value;
       }
@@ -743,15 +802,15 @@ function validateValue(field, value) {
       if (value && value.constructor === RegExp) {
         return value;
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected a RegExp");
+        throw new RuntimeError(this, "Expected a RegExp");
       } else if (typeof value == "string") {
         try {
           return new RegExp(value);
         } catch (initExecption) {
-          throw new Error("conf[" + name + "]: Expected a RegExp");
+          throw new RuntimeError(this, "Expected a RegExp");
         }
       } else {
-        throw new Error("conf[" + name + "]: Expected a RegExp");
+        throw new RuntimeError(this, "Expected a RegExp");
       }
       break;
       
@@ -761,16 +820,16 @@ function validateValue(field, value) {
       }
       if (typeof value == "string") {
         if (field.param(value) == null) {
-          throw new Error("conf[" + name + "]: Bad value '" + value + "'");
+          throw new RuntimeError(this, "Bad value '" + value + "'");
         } else {
           return value;
         }
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected a String");
+        throw new RuntimeError(this, "Expected a String");
       } else {
         value = value.toString();
         if (field.param(value) == null) {
-          throw new Error("conf[" + name + "]: Bad value '" + value + "'");
+          throw new RuntimeError(this, "Bad value '" + value + "'");
         } else {
           return value;
         }
@@ -781,7 +840,7 @@ function validateValue(field, value) {
       if (typeof value == "string") {
         return resolvePath(value, workdir);
       } else if (strict) {
-        throw new Error("conf[" + name + "]: Expected a path");
+        throw new RuntimeError(this, "Expected a path");
       } else {
         return resolvePath(value.toString(), workdir);
       }
@@ -791,11 +850,11 @@ function validateValue(field, value) {
       if (typeof value == "number") {
         return parseInt(value);
       } else if (typeof value == "string") {
-        return getBytes(value);
+        return getBytes.call(this, value);
       } else if (strict) {
-        throw new Error("Expected String or Number");
+        throw new RuntimeError(this, "Expected String or Number");
       } else {
-        return getBytes(value.toString());
+        return getBytes.call(this, value.toString());
       }
       break;
 
@@ -803,11 +862,11 @@ function validateValue(field, value) {
       if (typeof value == "number") {
         return parseInt(value);
       } else if (typeof value == "string") {
-        return getMilliseconds(value);
+        return getMilliseconds.call(this, value);
       } else if (strict) {
-        throw new Error("Expected String or Number");
+        throw new RuntimeError(this, "Expected String or Number");
       } else {
-        return getMilliseconds(value.toString());
+        return getMilliseconds.call(this, value.toString());
       }
       break;
       
@@ -823,7 +882,7 @@ function getBytes(expr) {
   var m  = BYTESIZE_RE(expr);
 
   if (!m) {
-    throw new Error("Invalid bytesize expression");
+    throw new RuntimeError(this, "Invalid bytesize expression");
   }
   
   if (m[2]) {
@@ -842,7 +901,7 @@ function getMilliseconds(expr) {
   var m  = TIMEUNIT_RE(expr);
   
   if (!m) {
-    throw new Error("Invalid timeunit expression");
+    throw new RuntimeError(this, "Invalid timeunit expression");
   }
   
   if (m[2]) {
