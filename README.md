@@ -115,6 +115,18 @@ Represents a Script.
 ### Script.runInContext(context, [env])
 
 
+## RuntimeError
+
+All errors produced by "conf" is derived from the class RuntimeError. The
+RunTimeError class inherits the native Error class.
+
+### RuntimeError.getSimpleMessage
+
+Returns a simplified message, without stack trace information, but with 
+error message and line number. 
+
+The `getSimpleMessage` method is useful when you want to show user what's
+wrong, without showing what happen "behind-the-scene".
 
 
 ## Defining context markup 
