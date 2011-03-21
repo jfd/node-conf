@@ -142,13 +142,10 @@ be used with any type. The common properties are:
 - `strict` indicates that the field value should be validated strictly.
 - `value` sets a default value for the field.
 - `idxignore` indicates that the field should be ignored in an index.
-- `param` has different meaning in different types. See type documentation for
-          implementation.
+- `param` has different meaning in different types. See type documentation for implementation.
 - `index` use field in a index.
-- `onenter` callback when entering a section (see section documentation for more 
-            details).
-- `onexit` callback when exiting a section (see section documentation for more 
-           details).
+- `onenter` callback when entering a section (see section documentation for more details).
+- `onexit` callback when exiting a section (see section documentation for more details).
 
 Some of the types can be used with a "shortcut". Shortcuts is used to 
 quickly define a property, without adding additionally markup. Here is an
