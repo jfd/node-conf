@@ -77,8 +77,8 @@ to run a config script.
 The `markup` is a data graph, that is used to describe the config script
 layout. A simple example:
 
-    var gendsl = require("gendsl");
-    gendsl.createContext({
+    var conf = require("conf");
+    conf.createContext({
       host: { type: "string", value: "localhost" },
       port: { type: "number", value: 8080}
     });
