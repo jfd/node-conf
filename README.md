@@ -479,6 +479,13 @@ to the script to include. Relative-paths are accepted.
 
     include("./mime_types.conf")
 
+It is also possible to use wildcard patterns to include one ore more
+files. Supported special characters are **"*"** and **"?"**. 
+
+    include("./sites/*.conf");
+
+Note: The `include` keyword does not check if config is already included. This could result in a never-ending loop if a config includes it self.
+
 ## License
 
 BSD-License.

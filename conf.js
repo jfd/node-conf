@@ -27,6 +27,7 @@
 const createScript          = require("vm").createScript
     , readFileSync          = require("fs").readFileSync
     , statSync              = require("fs").statSync
+    , readdirSync           = require("fs").readdirSync
     , join                  = require("path").join
     , normalize             = require("path").normalize
     , dirname               = require("path").dirname
@@ -43,6 +44,8 @@ const REQUIRED_RE           = /^[A-Z]*$/
     , PARAM_REQUIRED_RE     = /^(struct|section|expression|custom)/
     , BYTESIZE_RE           = /^([\d\.]+)(b|kb|mb|gb)$|^([\d\.]+)$/
     , TIMEUNIT_RE           = /^([\d\.]+)(ms|s|m|h|d)$|^([\d\.]+)$/;
+
+const ESCAPE_CHARS          = "\\^$*+?.()|{}[]";
 
 const NATIVE_TYPE_MAPPING   =
       [ Boolean, "boolean"
@@ -184,42 +187,87 @@ Runtime.prototype.pop = function() {
   return result;
 }
 
-Runtime.prototype.resolvePath = function(path) {
+Runtime.prototype.resolvePath = function(path, enableWildcard) {
   var workdir = this.workdir;
   var paths = this.paths;
   var isolated = this.isolated;
-  var newpath;
+  var wildcard = false;
+  var result;
+  var dirpath;
+  var files;
+  var pattern;
 
   if (isolated && (path[0] == "/" ||  /\.\.\//.test(path))) {
     return null;
   }
 
-  function isFile(path) {
+  if (/\*|\?/.test(basename(path))) {
+    if (!enableWildcard) {
+      throw new RuntimeError(this, "Wildcard matches is not supported");
+    }
+    wildcard = true;
+  }
+
+  function isKind(kind, path) {
+    var stat;
     try {
-      return statSync(path).isFile();
+      stat = statSync(path);
+      return kind == "dir" ? stat.isDirectory() : stat.isFile();
     } catch(e) {
       return false;
     }
     return true;
   }
 
-  if (path[0] == "/") {
-    return isFile(path) && path || null;
-  }
+  function resolveKind(kind, p) {
+    var newpath;
 
-  if (path[0] == ".") {
-    newpath = join(workdir, path);
-    return isFile(newpath) && newpath || null;
-  }
-
-  for (var i = 0, l = paths.length; i < l; i++) {
-    newpath = join(paths[i], path);
-    if (isFile(newpath)) {
-      return newpath;
+    if (p[0] == "/") {
+      return isKind(kind, p) && p || null;
     }
+
+    if (path[0] == ".") {
+      newpath = join(workdir, p);
+      return isKind(kind, newpath) && newpath || null;
+    }
+
+    for (var i = 0, l = paths.length; i < l; i++) {
+      newpath = join(paths[i], p);
+      if (isKind(kind, newpath)) {
+        return newpath;
+      }
+    }
+
+    return null;
   }
 
-  return null;
+  if (wildcard) {
+    dirpath = resolveKind("dir", dirname(path));
+
+    if (!dirpath) {
+      return null;
+    }
+
+    try {
+      files = readdirSync(dirpath);
+    } catch (listException) {
+      return null;
+    }
+
+    pattern = wildcardPattern(basename(path));
+    result = [];
+
+    files.forEach(function(file) {
+      var filepath = join(dirpath, file);
+      if (pattern.test(file) && isKind("file", filepath)) {
+        result.push(filepath);
+      }
+    })
+
+    return result;
+  } else {
+    return resolveKind("file", path);
+  }
 }
 
 
@@ -299,6 +347,7 @@ RuntimeError.prototype.getSimpleMessage = function() {
 
 // Include command implementation
 function includeImpl(filename) {
+  var self = this;
   var env = typeof arguments[1] === "object" && arguments[1] || {};
   var isolated = env && arguments[2] || arguments[1];
   var resolvedPath;
@@ -306,33 +355,40 @@ function includeImpl(filename) {
   var sandbox;
   var runtime;
 
-  resolvedPath = this.resolvePath(filename);
+  resolvedPath = this.resolvePath(filename, true);
 
   if (resolvedPath == null) {
     throw new RuntimeError(this, "Include not found '" + filename + "'");
   }
 
-  try {
-    script = new Script(resolvedPath);
-  } catch (ioException) {
-    throw new RuntimeError(this, "Could not include config script '" +
-                                 resolvedPath  + "'.");
+  if (!Array.isArray(resolvedPath)) {
+    resolvedPath = [resolvedPath];
   }
 
-  runtime = new Runtime( script
-                       , this.context
-                       , script.workdir
-                       , this.paths
-                       , this.strict
-                       , this.isolated || isolated);
+  resolvedPath.forEach(function(p) {
+    var msg;
 
-  runtime.copy(this);
+    try {
+      script = new Script(p);
+    } catch (ioException) {
+      throw new RuntimeError(self, msg);
+    }
 
-  sandbox = createSandbox(runtime, env || {});
+    runtime = new Runtime( script
+                         , self.context
+                         , script.workdir
+                         , self.paths
+                         , self.strict
+                         , self.isolated || isolated);
 
-  runScript(sandbox, script.code, script.filename);
+    runtime.copy(self);
 
-  this.copy(runtime);
+    sandbox = createSandbox(runtime, env || {});
+
+    runScript(sandbox, script.code, script.filename);
+
+    self.copy(runtime);
+  });
 }
 
 
@@ -925,4 +981,25 @@ function resolvePath(path, workdir) {
     case "~": return join(process.env["HOME"], path.substr(1));
     case ".": return join(workdir, path);
   }
+}
+
+function wildcardPattern(pattern) {
+  var result = [];
+  for (var i = 0; i < pattern.length; ++i) {
+    var c = pattern.charAt(i);
+    switch (c) {
+      case '?':
+        result.push(".");
+        break;
+      case '*':
+        result.push(".*");
+        break;
+      default:
+        if (ESCAPE_CHARS.indexOf(c) >= 0) {
+          result.push("\\");
+        }
+        result.push(c);
+      }
+  }
+  return new RegExp(result.join("") + "$");
 }
