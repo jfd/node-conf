@@ -25,9 +25,6 @@
 //
 
 const createScript          = require("vm").createScript
-    , readFileSync          = require("fs").readFileSync
-    , statSync              = require("fs").statSync
-    , readdirSync           = require("fs").readdirSync
     , join                  = require("path").join
     , normalize             = require("path").normalize
     , dirname               = require("path").dirname
@@ -85,23 +82,19 @@ exports.createContext = function(markup) {
   updateSection(context, markup);
 
   return context;
-}
+};
 
-exports.createScript = function(path, filename) {
-  var resolvedPath;
+exports.createScript = function(code, filename) {
   var script;
-
-  resolvedPath = resolvePath(path, process.cwd());
-  script  = new Script(resolvedPath, filename);
-
+  script  = new Script(code, filename);
   return script;
-}
+};
 
 
-function Script(path, filename) {
-  this.code = readFileSync(path, "utf8");
-  this.filename = filename || basename(path);
-  this.workdir = dirname(path);
+function Script(code, filename) {
+  this.code = code
+  this.filename = filename
+  this.workdir = process.cwd();
   this.strict = false;
   this.paths = [];
   this.isolated = false;
@@ -211,7 +204,7 @@ Runtime.prototype.resolvePath = function(path, enableWildcard) {
   function isKind(kind, path) {
     var stat;
     try {
-      stat = statSync(path);
+      stat = require("fs").statSync(path);
       return kind == "dir" ? stat.isDirectory() : stat.isFile();
     } catch(e) {
       return false;
@@ -249,7 +242,7 @@ Runtime.prototype.resolvePath = function(path, enableWildcard) {
     }
 
     try {
-      files = readdirSync(dirpath);
+      files = require("fs").readdirSync(dirpath);
     } catch (listException) {
       return null;
     }
@@ -367,12 +360,16 @@ function includeImpl(filename) {
 
   resolvedPath.forEach(function(p) {
     var msg;
+    var code;
 
     try {
-      script = new Script(p);
+      code = require("fs").readFileSync(p, "utf8");
     } catch (ioException) {
       throw new RuntimeError(self, msg);
     }
+
+    script = new Script(code, basename(p));
+    script.workdir = dirname(p);
 
     runtime = new Runtime( script
                          , self.context
