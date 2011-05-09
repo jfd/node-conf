@@ -5,7 +5,7 @@
 	"keywords": ["dsl", "conf", "config", "script", "general"],
 	"homepage": "https://github.com/jfd/node-conf",
 	"author": "Johan Dahlberg <dahlberg.johan@gmail.com> (https://github.com/jfd/)",
-	"main": "conf",
+	"main": "./conf",
 	"repository": {
 		"type": "git",
 		"url": "git://github.com/jfd/node-conf.git"
