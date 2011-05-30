@@ -1,6 +1,6 @@
 {
 	"name": "conf",
-	"version": "0.8.1",
+	"version": "0.8.2",
 	"description": "Config library for Nodejs",
 	"keywords": ["dsl", "conf", "config", "script", "general"],
 	"homepage": "https://github.com/jfd/node-conf",
