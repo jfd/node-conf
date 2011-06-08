@@ -415,11 +415,11 @@ function createSandbox(runtime, env) {
       var field = this.currentScope;
       var result = this.currentResult;
 
-      this.pop();
-
       if (typeof field.onexit == "function") {
         field.onexit(this, result);
       }
+
+      this.pop();
 
     }).bind(runtime)
   });
