@@ -621,6 +621,10 @@ function endScope(scope, result, index) {
   var length;
   var field;
 
+  if (!scope) {
+    throw new RuntimeError(this, "bad syntax, unexpected `end`");
+  }
+
   keys = Object.keys(scope.fields);
   length = keys.length;
 
