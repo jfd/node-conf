@@ -338,6 +338,37 @@ RuntimeError.prototype.getSimpleMessage = function() {
 };
 
 
+// define command implementation
+function defineImpl(name, markup) {
+  var runtime = this[0];
+  var sandbox = this[1];
+  var context = runtime.context;
+  var sectionmarkup = {};
+
+  if (typeof context[name] !== "undefined") {
+    throw new RuntimeError(runtime, "already defined");
+  }
+
+  sectionmarkup[name] = markup;
+
+  try {
+    updateSection(context, sectionmarkup);
+  } catch (updateError) {
+    throw new RuntimeError(runtime, updateError.message);
+  }
+
+  // Re-map all props
+  for (var name in context.props) {
+    propfn = context.props[name].bind(runtime);
+    if (name in sandbox.__props == false) {
+      Object.defineProperty(sandbox.__props, name, {
+        get: propfn, set: propfn
+      });
+    }
+  }
+}
+
+
 // Include command implementation
 function includeImpl(filename) {
   var self = this;
@@ -425,6 +456,7 @@ function createSandbox(runtime, env) {
   });
 
   sandbox.include = includeImpl.bind(runtime);
+  sandbox.define = defineImpl.bind([runtime, sandbox]);
 
   for (var name in env) {
     if (RESERVED_NAMES_RE(name)) {
