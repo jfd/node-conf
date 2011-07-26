@@ -98,9 +98,11 @@ function Script(code, filename) {
   this.strict = false;
   this.paths = [];
   this.isolated = false;
+  this.globals = null;
 }
 
 Script.prototype.runInContext = function(context, env) {
+  var globals = this.globals || {};
   var sandbox;
   var runtime;
   var result;
@@ -109,12 +111,13 @@ Script.prototype.runInContext = function(context, env) {
     throw new Error("Expected a ConfigContext as context");
   }
 
-  runtime = new Runtime( this
-                       , context
-                       , this.workdir
-                       , this.paths
-                       , this.strict
-                       , this.isolated);
+  runtime = new Runtime(this,
+                        context,
+                        this.workdir,
+                        this.paths,
+                        this.strict,
+                        this.isolated,
+                        globals);
 
 
   sandbox = createSandbox(runtime, env || {});
@@ -129,13 +132,14 @@ Script.prototype.runInContext = function(context, env) {
 };
 
 // Runtime
-function Runtime(script, context, workdir, paths, strict, isolated) {
+function Runtime(script, context, workdir, paths, strict, isolated, globals) {
   this.script = script;
   this.context = context;
   this.workdir = workdir;
   this.paths = paths;
   this.strict = strict;
   this.isolated = isolated;
+  this.globals = globals;
 
   this.resultStack = [];
   this.currentResult = null;
@@ -402,12 +406,13 @@ function includeImpl(filename) {
     script = new Script(code, basename(p));
     script.workdir = dirname(p);
 
-    runtime = new Runtime( script
-                         , self.context
-                         , script.workdir
-                         , self.paths
-                         , self.strict
-                         , self.isolated || isolated);
+    runtime = new Runtime(script,
+                          self.context,
+                          script.workdir,
+                          self.paths,
+                          self.strict,
+                          self.isolated || isolated,
+                          self.globals);
 
     runtime.copy(self);
 
@@ -432,6 +437,7 @@ function runScript(sandbox, code, filename) {
 function createSandbox(runtime, env) {
   var sandbox = { __props : {} };
   var context = runtime.context;
+  var globals = runtime.globals;
   var propfn;
 
   for (var name in context.props) {
@@ -463,6 +469,13 @@ function createSandbox(runtime, env) {
       throw new Error("Environment property '" +  name + "' is reserved.");
     }
     sandbox[name] = env[name];
+  }
+
+  for (var key in globals) {
+    if (RESERVED_NAMES_RE(key)) {
+      throw new Error("Global property '" +  key + "' is reserved.");
+    }
+    sandbox[key] = globals[key];
   }
 
   return sandbox;
