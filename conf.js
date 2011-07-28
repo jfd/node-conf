@@ -680,7 +680,7 @@ function applyResult(field, value) {
       index && (index[index.length] = validated);
     }
 
-  } else if (name in result) {
+  } else if (field.overridable == false && (name in result)) {
     throw new RuntimeError(this, "Expected one value only");
   } else {
     validated = validateValue.call(this, field, value);
@@ -769,6 +769,7 @@ function endScope(scope, result, index) {
 function getPropertyField(name, expr) {
   var type = null;
   var required = false;
+  var overridable = false;
   var list = false;
   var value = NIL;
   var param = null;
@@ -849,6 +850,7 @@ function getPropertyField(name, expr) {
     index = index && index || expr.index;
     strict = expr.strict || false;
     idxignore = expr.idxignore || false;
+    overridable = expr.overridable || false;
     onenter = expr.onenter || null;
     onexit = expr.onexit || null;
     ns = expr.ns || null;
@@ -867,6 +869,7 @@ function getPropertyField(name, expr) {
           strict: strict,
           value: value,
           idxignore: idxignore,
+          overridable: overridable,
           index: index,
           ns: ns,
           onenter: onenter,
