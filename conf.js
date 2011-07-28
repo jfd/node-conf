@@ -361,13 +361,28 @@ function defineImpl(name, markup) {
     throw new RuntimeError(runtime, updateError.message);
   }
 
-  // Re-map all props
-  for (var name in context.props) {
-    propfn = context.props[name].bind(runtime);
-    if (name in sandbox.__props == false) {
-      Object.defineProperty(sandbox.__props, name, {
-        get: propfn, set: propfn
-      });
+  defineProperties(runtime, context.props, sandbox.__props);
+}
+
+function defineProperties(runtime, properties, target) {
+  var namespace;
+  var property;
+
+  for (var name in properties) {
+    property = properties[name];
+
+    if (typeof property == "object") {
+      // Special case, namespace. We need to rebuild this
+      // each time, to keep it updated.
+      defineProperties(runtime, property, (namespace = {}));
+      target[name] = namespace;
+    } else {
+      if (name in target == false) {
+        property = property.bind(runtime);
+        Object.defineProperty(target, name, {
+          enumerable: true, get: property, set: property
+        });
+      }
     }
   }
 }
@@ -440,12 +455,7 @@ function createSandbox(runtime, env) {
   var globals = runtime.globals;
   var propfn;
 
-  for (var name in context.props) {
-    propfn = context.props[name].bind(runtime);
-    Object.defineProperty(sandbox.__props, name, {
-      get: propfn, set: propfn
-    });
-  }
+  defineProperties(runtime, context.props, sandbox.__props);
 
   Object.defineProperty(sandbox.__props, "end", {
     get: (function() {
@@ -482,6 +492,21 @@ function createSandbox(runtime, env) {
 }
 
 
+function getNamespace(target, expr) {
+  var splitted = expr.split(".");
+  var name = splitted.shift();
+  var obj;
+
+  if (name in target) {
+    obj = target[name];
+  } else {
+    obj = target[name] = {};
+  }
+
+  return splitted.length ?  getNamespace(obj, splitted.join(".")) : obj;
+}
+
+
 // Update section with specified markup
 function updateSection(scope, markup) {
   var root = scope.root;
@@ -490,6 +515,7 @@ function updateSection(scope, markup) {
   var length;
   var field;
   var subscope;
+  var ns;
 
   keys = Object.keys(markup);
   length = keys.length;
@@ -568,8 +594,10 @@ function updateSection(scope, markup) {
 
     }
 
-    if (!root.props[name]) {
-      root.props[name] = createProp(name);
+    ns = field.ns ? getNamespace(root.props, field.ns) : root.props;
+
+    if (!ns[name]) {
+      ns[name] = createProp(name, field.ns);
     }
 
     scope.fields[name] = field;
@@ -578,17 +606,20 @@ function updateSection(scope, markup) {
 
 
 // Create a new property wrapper
-function createProp(name) {
+function createProp(name, ns) {
   return function(value) {
     var args = slice.call(arguments);
     var scope = this.currentScope;
+    var fullname;
     var field;
     var prop;
 
+    fullname = ns ? [ns, name].join(".") : name;
+
     if (!scope || !scope.fields ||
         !(field = scope.fields[name])) {
-      throw new Error( "Property '" + name + "' cannot be defined "
-                     + "in section '" + scope.name + "'");
+      throw new Error( "Property '" + fullname + "' cannot be defined "
+                     + "in section '" + (scope && scope.name || "<null>") + "'");
     }
 
     if (field.type == "section" || field.type == "struct") {
@@ -597,7 +628,7 @@ function createProp(name) {
       if (field.property) {
 
         if (!(prop = field.fields[field.property])) {
-          throw new Error( "Property '" + name + "', field not found: "
+          throw new Error( "Property '" + fullname + "', field not found: "
                          + field.property);
         }
 
@@ -626,6 +657,10 @@ function applyResult(field, value) {
   var result = this.currentResult;
   var index = !field.idxignore && this.currentIndex;
   var validated;
+
+  if (typeof field.ns == "string") {
+    result = getNamespace(result, field.ns);
+  }
 
   if (field.list) {
 
@@ -743,6 +778,7 @@ function getPropertyField(name, expr) {
   var idxignore = false;
   var onenter = null;
   var onexit = null;
+  var ns = null;
   var ctor;
   var i;
 
@@ -815,24 +851,26 @@ function getPropertyField(name, expr) {
     idxignore = expr.idxignore || false;
     onenter = expr.onenter || null;
     onexit = expr.onexit || null;
+    ns = expr.ns || null;
   }
 
   if (PROPERTY_TYPES.indexOf(type) == -1) {
     throw new Error("Property '" + name + "', unknown field type: " + type);
   }
 
-  return { name: name
-         , type: type
-         , property: property
-         , list: list
-         , required: required
-         , param: param
-         , strict: strict
-         , value: value
-         , idxignore: idxignore
-         , index: index
-         , onenter: onenter
-         , onexit: onexit };
+  return {name: name,
+          type: type,
+          property: property,
+          list: list,
+          required: required,
+          param: param,
+          strict: strict,
+          value: value,
+          idxignore: idxignore,
+          index: index,
+          ns: ns,
+          onenter: onenter,
+          onexit: onexit };
 }
 
 
