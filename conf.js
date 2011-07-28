@@ -124,7 +124,7 @@ Script.prototype.runInContext = function(context, env) {
 
   runtime.push(context);
 
-  runScript(sandbox, this.code, this.filename);
+  runScript(runtime, sandbox, this.code, this.filename);
 
   while ((result = runtime.pop()) && runtime.currentScope);
 
@@ -283,8 +283,11 @@ function ConfigContext() {
 }
 
 
-function RuntimeError(runtime, message) {
+function RuntimeError(runtime, message, label) {
   var self = this;
+  var script;
+  var stack;
+  var obj;
   var tmp;
 
   this.runtime = runtime;
@@ -308,37 +311,59 @@ function RuntimeError(runtime, message) {
   // generate the stack-dump as string.
   Error.captureStackTrace(this, RuntimeError);
 
+  if (typeof label == "string") {
+    this.label = label;
+  } else {
+
+    if (!runtime || !runtime.script) {
+      this.label = "unknown";
+      return;
+    }
+
+    script = this.runtime.script;
+    stack = this._stack;
+
+    for (var i = 0; i < stack.length; i++) {
+      obj = stack[i];
+
+      if (obj.getTypeName() == "[object global]" &&
+          obj.getEvalOrigin() == script.filename) {
+        // Matched current script.
+        this.label = [script.filename,
+                      obj.getLineNumber(),
+                      obj.getColumnNumber()].join(":");
+      }
+    }
+  }
+
 }
 
 exports.RuntimeError = RuntimeError;
 require("util").inherits(RuntimeError, Error);
 
 RuntimeError.prototype.getSimpleMessage = function() {
-  var script;
+  return this.message + " (" + this.label + ")";
+};
+
+// Kind of "hacky", but it works.
+RuntimeError.fromNativeError = function(runtime, error) {
   var stack;
-  var obj;
+  var re;
+  var m;
 
-  if (!this.runtime || !this.runtime.script) {
-    throw new Error("Uncompatible error object");
-  }
-
-  script = this.runtime.script;
-
-  stack = this._stack;
-
-  for (var i = 0; i < stack.length; i++) {
-    obj = stack[i];
-
-    if (obj.getTypeName() == "[object global]" &&
-        obj.getEvalOrigin() == script.filename) {
-      // Matched current script.
-
-      return this.message + " (" + script.filename + " " + obj.getLineNumber()
-             + ":" + obj.getColumnNumber() + ")";
+  if (typeof error == "object" && error.stack && runtime.script) {
+    re = new RegExp("at\\s(" + runtime.script.filename + "\\:\\d+\\:\\d+)");
+    stack = error.stack.split("\n");
+    for (var i = 0, l = stack.length; i < l; i++) {
+      if ((m = re(stack[i]))) {
+        return new RuntimeError(runtime, error.message || error.toString(),
+                                         m[1]);
+      }
     }
+    return new RuntimeError(runtime, error.message || error.toString());
+  } else {
+    return new RuntimeError(runtime, error);
   }
-
-  return this.message;
 };
 
 
@@ -433,7 +458,7 @@ function includeImpl(filename) {
 
     sandbox = createSandbox(runtime, env || {});
 
-    runScript(sandbox, script.code, script.filename);
+    runScript(runtime, sandbox, script.code, script.filename);
 
     self.copy(runtime);
   });
@@ -441,9 +466,23 @@ function includeImpl(filename) {
 
 
 // Run a script in sandbox
-function runScript(sandbox, code, filename) {
-  var script = createScript(WRAPPER_TMPL.replace(/%s/g, code), filename);
-  script.runInNewContext(sandbox);
+function runScript(runtime, sandbox, code, filename) {
+  var wrapper = WRAPPER_TMPL.replace(/%s/g, code);
+  var script = createScript(wrapper, filename);
+  try {
+    script.runInNewContext(sandbox);
+  } catch (scriptError) {
+    if (scriptError instanceof RuntimeError) {
+      throw scriptError;
+    } else if (typeof scriptError == "object" &&
+               typeof scriptError.stack == "string") {
+      throw RuntimeError.fromNativeError(runtime, scriptError);
+    } else {
+      throw new RuntimeError(runtime, scriptError &&
+                                      scriptError.message ||
+                                      "unknown runtime error");
+    }
+  }
 }
 
 
