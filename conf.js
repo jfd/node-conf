@@ -602,7 +602,7 @@ function updateSection(scope, markup) {
     }
 
     if (field.required) {
-      scope.requirements[name] = true;
+      scope.requirements[name] = field;
     }
 
     field.root = root;
@@ -734,6 +734,7 @@ function applyResult(field, value) {
 // End scope
 function endScope(scope, result, index) {
   var self = this;
+  var target;
   var defvalue;
   var keys;
   var key;
@@ -750,27 +751,28 @@ function endScope(scope, result, index) {
   while (length--) {
     key = keys[length];
     field = scope.fields[key];
+    target = field.ns ? getNamespace(result, field.ns) : result;
 
-    if (!(key in result)) {
+    if (!(key in target)) {
       if (key in scope.defaults) {
         if (field.list) {
-          result[key] = [];
+          target[key] = [];
           if (Array.isArray(scope.defaults[key])) {
             scope.defaults[key].forEach(function(val) {
               var validated = validateValue.call(self, field, val);
-              result[key].push(val);
+              target[key].push(val);
               index && (index[index.length] = val);
             });
           } else {
             defvalue = scope.defaults[key];
-            result[key].push(validateValue.call(self, field, defvalue));
+            target[key].push(validateValue.call(self, field, defvalue));
           }
         } else {
           defvalue = scope.defaults[key];
-          result[key] = validateValue.call(self, field, defvalue);
+          target[key] = validateValue.call(self, field, defvalue);
         }
       } else if (field.list && !field.required) {
-        result[key] = [];
+        target[key] = [];
       }
     }
   }
@@ -780,7 +782,9 @@ function endScope(scope, result, index) {
 
   while (length--) {
     key = keys[length];
-    if (!(key in result)) {
+    field = scope.requirements[key];
+    target = field.ns ? getNamespace(result, field.ns) : result;
+    if (!(key in target)) {
       throw new RuntimeError(self, "Required property '" + key + "'"
                                  + "was not set.");
     }
