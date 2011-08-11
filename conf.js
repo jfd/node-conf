@@ -84,10 +84,28 @@ exports.createContext = function(markup) {
   return context;
 };
 
+
 exports.createScript = function(code, filename) {
   var script;
   script  = new Script(code, filename);
   return script;
+};
+
+
+exports.validateValue = function(type, value, strict) {
+  var fakefield;
+
+  if (typeof type == "undefined") {
+    throw new Error("bad argument, `type`, expected type");
+  }
+
+  fakefield = { type: type, strict: strict || false };
+
+  try {
+    return validateValue.call(null, fakefield, value);
+  } catch (validationError) {
+    throw new Error(validationError.message);
+  }
 };
 
 
