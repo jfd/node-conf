@@ -94,12 +94,17 @@ exports.createScript = function(code, filename) {
 
 exports.validateValue = function(type, value, strict) {
   var fakefield;
+  var param;
 
   if (typeof type == "undefined") {
     throw new Error("bad argument, `type`, expected type");
   }
 
-  fakefield = { type: type, strict: strict || false };
+  if (typeof type == "function") {
+    fakefield = { type: "custom", param: type,  strict: strict || false };
+  } else {
+    fakefield = { type: type, strict: strict || false };
+  }
 
   try {
     return validateValue.call(null, fakefield, value);
