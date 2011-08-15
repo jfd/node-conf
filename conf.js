@@ -37,7 +37,7 @@ const NIL                   = {};
 const WRAPPER_TMPL          = "with (__props) {%s;\n}";
 
 const REQUIRED_RE           = /^[A-Z]*$/
-    , RESERVED_NAMES_RE     = /^(end|include)$/
+    , RESERVED_NAMES_RE     = /^(end|include|define)$/
     , PARAM_REQUIRED_RE     = /^(struct|section|expression|custom)/
     , BYTESIZE_RE           = /^([\d\.]+)(b|kb|mb|gb)$|^([\d\.]+)$/
     , TIMEUNIT_RE           = /^([\d\.]+)(ms|s|m|h|d)$|^([\d\.]+)$/;
@@ -378,7 +378,7 @@ RuntimeError.fromNativeError = function(runtime, error) {
     re = new RegExp("at\\s(" + runtime.script.filename + "\\:\\d+\\:\\d+)");
     stack = error.stack.split("\n");
     for (var i = 0, l = stack.length; i < l; i++) {
-      if ((m = re(stack[i]))) {
+      if ((m = re.exec(stack[i]))) {
         return new RuntimeError(runtime, error.message || error.toString(),
                                          m[1]);
       }
@@ -537,14 +537,14 @@ function createSandbox(runtime, env) {
   sandbox.define = defineImpl.bind([runtime, sandbox]);
 
   for (var name in env) {
-    if (RESERVED_NAMES_RE(name)) {
+    if (RESERVED_NAMES_RE.test(name)) {
       throw new Error("Environment property '" +  name + "' is reserved.");
     }
     sandbox[name] = env[name];
   }
 
   for (var key in globals) {
-    if (RESERVED_NAMES_RE(key)) {
+    if (RESERVED_NAMES_RE.test(key)) {
       throw new Error("Global property '" +  key + "' is reserved.");
     }
     sandbox[key] = globals[key];
@@ -585,7 +585,7 @@ function updateSection(scope, markup) {
   for (var index = 0; index < length; index++) {
     name = keys[index];
 
-    if (RESERVED_NAMES_RE(name)) {
+    if (RESERVED_NAMES_RE.test(name)) {
       throw new Error("Name '" + name + "' is reserved.");
     }
 
@@ -611,7 +611,7 @@ function updateSection(scope, markup) {
       continue;
     }
 
-    if (PARAM_REQUIRED_RE(field.type) && !field.param) {
+    if (PARAM_REQUIRED_RE.test(field.type) && !field.param) {
       throw new Error("Property '" + name + "', `param` must be set for field.");
     }
 
@@ -856,7 +856,7 @@ function getPropertyField(name, expr) {
   if (Array.isArray(expr)) {
     if (typeof expr[0] === "string") {
       type = expr[0].toLowerCase();
-      required = REQUIRED_RE(expr[0]) && true || false;
+      required = REQUIRED_RE.test(expr[0]) && true || false;
     } else if (expr[0].constructor === RegExp) {
       type = "expression";
       param = expr[0];
@@ -875,7 +875,7 @@ function getPropertyField(name, expr) {
     param = expr;
   } else if (typeof expr === "string") {
     type = expr.toLowerCase();
-    required = REQUIRED_RE(expr) && true || false;
+    required = REQUIRED_RE.test(expr) && true || false;
   } else if ((i = NATIVE_TYPE_MAPPING.indexOf(expr)) != -1) {
     type = NATIVE_TYPE_MAPPING[i + 1];
   } else if (typeof expr == "function") {
@@ -884,7 +884,7 @@ function getPropertyField(name, expr) {
   } else {
     if (typeof expr.type === "string") {
       type = expr.type.toLowerCase();
-      required = REQUIRED_RE(expr.type) && true || false;
+      required = REQUIRED_RE.test(expr.type) && true || false;
     } else if (expr.type && expr.type.constructor === RegExp) {
       type = "expression";
       param = expr.type;
@@ -903,7 +903,7 @@ function getPropertyField(name, expr) {
       type = "custom";
       param = expr.type;
     }
-    required = expr.required || (REQUIRED_RE(expr) && true || false);
+    required = expr.required || (REQUIRED_RE.test(expr) && true || false);
     // value = "value" in expr && expr.value || NIL;
 
     if ("value" in expr) {
@@ -1088,7 +1088,7 @@ function validateValue(field, value) {
 }
 
 function getBytes(expr) {
-  var m  = BYTESIZE_RE(expr);
+  var m  = BYTESIZE_RE.exec(expr);
 
   if (!m) {
     throw new RuntimeError(this, "Invalid bytesize expression");
@@ -1107,7 +1107,7 @@ function getBytes(expr) {
 }
 
 function getMilliseconds(expr) {
-  var m  = TIMEUNIT_RE(expr);
+  var m  = TIMEUNIT_RE.exec(expr);
 
   if (!m) {
     throw new RuntimeError(this, "Invalid timeunit expression");
