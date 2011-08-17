@@ -154,6 +154,117 @@ Script.prototype.runInContext = function(context, env) {
   return result;
 };
 
+
+// define command implementation
+function defineImpl(name, markup) {
+  var sectionmarkup = {};
+  var runtime;
+  var sandbox;
+  var context;
+
+  if (this instanceof Runtime) {
+    runtime = this;
+  } else {
+    runtime = this[0];
+    sandbox = this[1];
+  }
+
+  context = runtime.context;
+
+  if (typeof context[name] !== "undefined") {
+    throw new RuntimeError(runtime, "already defined");
+  }
+
+  sectionmarkup[name] = markup;
+
+  try {
+    updateSection(context, sectionmarkup);
+  } catch (updateError) {
+    throw new RuntimeError(runtime, updateError.message);
+  }
+
+  if (sandbox) {
+    defineProperties(runtime, context.props, sandbox.__props);
+  }
+}
+
+
+function defineProperties(runtime, properties, target) {
+  var namespace;
+  var property;
+
+  for (var name in properties) {
+    property = properties[name];
+
+    if (typeof property == "object") {
+      // Special case, namespace. We need to rebuild this
+      // each time, to keep it updated.
+      defineProperties(runtime, property, (namespace = {}));
+      target[name] = namespace;
+    } else {
+      if (name in target == false) {
+        property = property.bind(runtime);
+        Object.defineProperty(target, name, {
+          enumerable: true, get: property, set: property
+        });
+      }
+    }
+  }
+}
+
+
+// Include command implementation
+function includeImpl(filename) {
+  var self = this;
+  var env = typeof arguments[1] === "object" && arguments[1] || {};
+  var isolated = env && arguments[2] || arguments[1];
+  var resolvedPath;
+  var script;
+  var sandbox;
+  var runtime;
+
+  resolvedPath = this.resolvePath(filename, true);
+
+  if (resolvedPath == null) {
+    throw new RuntimeError(this, "Include not found '" + filename + "'");
+  }
+
+  if (!Array.isArray(resolvedPath)) {
+    resolvedPath = [resolvedPath];
+  }
+
+  resolvedPath.forEach(function(p) {
+    var msg;
+    var code;
+
+    try {
+      code = require("fs").readFileSync(p, "utf8");
+    } catch (ioException) {
+      throw new RuntimeError(self, msg);
+    }
+
+    script = new Script(code, basename(p));
+    script.workdir = dirname(p);
+
+    runtime = new Runtime(script,
+                          self.context,
+                          script.workdir,
+                          self.paths,
+                          self.strict,
+                          self.isolated || isolated,
+                          self.globals);
+
+    runtime.copy(self);
+
+    sandbox = createSandbox(runtime, env || {});
+
+    runScript(runtime, sandbox, script.code, script.filename);
+
+    self.copy(runtime);
+  });
+}
+
+
 // Runtime
 function Runtime(script, context, workdir, paths, strict, isolated, globals) {
   this.script = script;
@@ -173,6 +284,8 @@ function Runtime(script, context, workdir, paths, strict, isolated, globals) {
   this.indexStack = [];
   this.currentIndex = null;
 }
+
+Runtime.prototype.define = defineImpl;
 
 // Copy a runtime variables from specified runtime
 Runtime.prototype.copy = function(runtime) {
@@ -383,109 +496,12 @@ RuntimeError.fromNativeError = function(runtime, error) {
                                          m[1]);
       }
     }
+    console.log(error.stack);
     return new RuntimeError(runtime, error.message || error.toString());
   } else {
     return new RuntimeError(runtime, error);
   }
 };
-
-
-// define command implementation
-function defineImpl(name, markup) {
-  var runtime = this[0];
-  var sandbox = this[1];
-  var context = runtime.context;
-  var sectionmarkup = {};
-
-  if (typeof context[name] !== "undefined") {
-    throw new RuntimeError(runtime, "already defined");
-  }
-
-  sectionmarkup[name] = markup;
-
-  try {
-    updateSection(context, sectionmarkup);
-  } catch (updateError) {
-    throw new RuntimeError(runtime, updateError.message);
-  }
-
-  defineProperties(runtime, context.props, sandbox.__props);
-}
-
-function defineProperties(runtime, properties, target) {
-  var namespace;
-  var property;
-
-  for (var name in properties) {
-    property = properties[name];
-
-    if (typeof property == "object") {
-      // Special case, namespace. We need to rebuild this
-      // each time, to keep it updated.
-      defineProperties(runtime, property, (namespace = {}));
-      target[name] = namespace;
-    } else {
-      if (name in target == false) {
-        property = property.bind(runtime);
-        Object.defineProperty(target, name, {
-          enumerable: true, get: property, set: property
-        });
-      }
-    }
-  }
-}
-
-
-// Include command implementation
-function includeImpl(filename) {
-  var self = this;
-  var env = typeof arguments[1] === "object" && arguments[1] || {};
-  var isolated = env && arguments[2] || arguments[1];
-  var resolvedPath;
-  var script;
-  var sandbox;
-  var runtime;
-
-  resolvedPath = this.resolvePath(filename, true);
-
-  if (resolvedPath == null) {
-    throw new RuntimeError(this, "Include not found '" + filename + "'");
-  }
-
-  if (!Array.isArray(resolvedPath)) {
-    resolvedPath = [resolvedPath];
-  }
-
-  resolvedPath.forEach(function(p) {
-    var msg;
-    var code;
-
-    try {
-      code = require("fs").readFileSync(p, "utf8");
-    } catch (ioException) {
-      throw new RuntimeError(self, msg);
-    }
-
-    script = new Script(code, basename(p));
-    script.workdir = dirname(p);
-
-    runtime = new Runtime(script,
-                          self.context,
-                          script.workdir,
-                          self.paths,
-                          self.strict,
-                          self.isolated || isolated,
-                          self.globals);
-
-    runtime.copy(self);
-
-    sandbox = createSandbox(runtime, env || {});
-
-    runScript(runtime, sandbox, script.code, script.filename);
-
-    self.copy(runtime);
-  });
-}
 
 
 // Run a script in sandbox
