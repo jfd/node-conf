@@ -496,7 +496,6 @@ RuntimeError.fromNativeError = function(runtime, error) {
                                          m[1]);
       }
     }
-    console.log(error.stack);
     return new RuntimeError(runtime, error.message || error.toString());
   } else {
     return new RuntimeError(runtime, error);
@@ -963,7 +962,6 @@ function getPropertyField(name, expr) {
 function validateValue(field, value) {
   var strict = this.strict || field.strict;
   var workdir = this.workdir;
-
 
   switch (field.type) {
 
